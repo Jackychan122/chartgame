@@ -1,5 +1,7 @@
 # 📈 K線操盤挑戰 ChartGame
 
+**🎮 線上版:https://jackychan122.github.io/chartgame/**
+
 重現 [chartgame.com](https://www.cmoney.tw/notes/note-detail.aspx?nid=8700) 的K線模擬投資遊戲:
 系統隨機抽出一檔**真實美股**的過去走勢(隱藏股票名稱與日期),你只有圖表與技術指標,
 本金 $10,000 全額進出,測試你的技術分析能否打敗「買進持有」。
