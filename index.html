@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K線操盤挑戰 | 你能打敗「買進持有」嗎?</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">📈 K線操盤挑戰<span class="mode" id="modeTag">ChartGame</span></div>
+  <div class="hud" id="hudMain">
+    <span>股票 <b class="mystery" id="hudStock">❓ ???</b></span>
+    <span>總資產 <b id="hudEquity">$10,000.00</b> <i id="hudRet" class="pos">+0.00%</i></span>
+    <span>買進持有 <i id="hudBh" class="pos">+0.00%</i> <i id="hudDelta"></i></span>
+    <span>進度 <b id="hudProg">—</b></span>
+  </div>
+  <div class="top-btns">
+    <button class="icon-btn" id="btnHelp" title="玩法說明">❓</button>
+    <button class="icon-btn" id="btnSide" title="工具箱">⚙</button>
+    <button class="btn-ghost sm" id="btnTrack">📋 我的戰績</button>
+  </div>
+</header>
+<div id="progressWrap"><div id="progressFill"></div></div>
+
+<main>
+  <section id="chartWrap">
+    <div id="chart"></div>
+    <div id="legend"></div>
+  </section>
+
+  <aside id="sidebar">
+    <section class="panel">
+      <h3>💡 帳戶與持倉</h3>
+      <div id="posBox">
+        <div class="pos-row"><span>現金</span><b id="pCash">$10,000.00</b></div>
+        <div class="pos-row"><span>持股</span><b id="pShares">—</b></div>
+        <div class="pos-row"><span>持倉損益</span><b id="pPnl">—</b></div>
+        <div class="pos-row"><span>交易次數</span><b id="pTrades">0</b></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>🧰 技術指標</h3>
+      <div id="indList"></div>
+    </section>
+
+    <section class="panel">
+      <h3>📜 交易紀錄</h3>
+      <div id="tradeList" class="trade-list"><div class="empty">尚無交易,按 B 買進、S 賣出。</div></div>
+    </section>
+  </aside>
+</main>
+
+<footer id="actionBar">
+  <div class="ctl-row" id="playControls">
+    <button id="btnBuy" class="btn-buy" disabled>🟢 買進<span class="kbd">B</span></button>
+    <div class="tl-group">
+      <div class="chips" id="speedChips">
+        <button class="chip on" data-x="1">×1</button>
+        <button class="chip" data-x="5">×5</button>
+        <button class="chip" data-x="20">×20</button>
+      </div>
+      <div class="tl-main">
+        <button id="btnStep" class="btn-step" disabled>⏩ 快轉 1 根<span class="kbd">T</span></button>
+        <button id="btnAuto" class="btn-auto">▶ 自動</button>
+      </div>
+    </div>
+    <button id="btnSell" class="btn-sell" disabled>🔴 賣出<span class="kbd">S</span></button>
+  </div>
+  <!-- 結算後:檢視揭曉線圖時的操作列 -->
+  <div class="ctl-row hidden" id="endControls">
+    <button class="btn-primary" id="btnAgain2">🎲 再玩一局</button>
+    <button class="btn-ghost" id="btnShowResult">📊 查看結算</button>
+    <button class="btn-ghost" id="btnHome2">回首頁</button>
+  </div>
+</footer>
+
+<!-- 開始畫面 -->
+<div class="overlay" id="startOverlay">
+  <div class="card">
+    <h1>📈 K線操盤挑戰</h1>
+    <div class="tagline">你能靠技術分析,打敗「買進持有」的懶人策略嗎?</div>
+    <div class="desc">
+      系統隨機抽出一檔<b>真實美股</b>的過去走勢——股票名稱與日期全部隱藏,你只有圖表與技術指標。
+      本金 <b>$10,000</b>,每次下單全額進出,在下一根K棒的開盤價成交。
+      玩到最後一根,結算你的報酬率能否贏過從第一天就買進抱到尾的報酬率。
+    </div>
+    <div class="period-grid" id="periodGrid"></div>
+    <button class="btn-primary" id="btnStart">🎲 開始挑戰</button>
+    <div class="foot-note">資料:70 檔美股真實歷史日K(2011–2026,Yahoo Finance)· 僅供娛樂與練習,非投資建議</div>
+  </div>
+</div>
+
+<!-- 結算畫面 -->
+<div class="overlay hidden" id="resultOverlay">
+  <div class="card">
+    <div class="verdict" id="resVerdict"></div>
+    <div class="reveal" id="resStock"></div>
+    <div class="res-grid" id="resGrid"></div>
+    <div class="btn-row">
+      <button class="btn-primary" id="btnAgain">🎲 再玩一局</button>
+      <button class="btn-ghost" id="btnViewChart">👁 看線圖</button>
+      <button class="btn-ghost" id="btnHome">回首頁</button>
+      <button class="btn-ghost" id="btnTrack2">📋 戰績</button>
+    </div>
+  </div>
+</div>
+
+<!-- 戰績畫面 -->
+<div class="overlay hidden" id="trackOverlay">
+  <div class="card">
+    <h2>📋 我的戰績</h2>
+    <div class="track-stats" id="trackStats"></div>
+    <div class="track-scroll"><table class="track-table">
+      <thead><tr><th>日期</th><th>股票</th><th>期間</th><th>你的報酬</th><th>買進持有</th><th>結果</th></tr></thead>
+      <tbody id="trackBody"></tbody>
+    </table></div>
+    <div class="btn-row">
+      <button class="btn-ghost" id="btnTrackClose">關閉</button>
+      <button class="btn-ghost" id="btnTrackClear">🗑 清除紀錄</button>
+    </div>
+  </div>
+</div>
+
+<!-- 說明畫面 -->
+<div class="overlay hidden" id="helpOverlay">
+  <div class="card">
+    <h2>❓ 玩法說明</h2>
+    <ul class="help-list">
+      <li>畫面顯示一檔隨機美股的K線圖(名稱、日期隱藏),左側為已走完的歷史,你的挑戰從最後一根開始。</li>
+      <li><b>🟢 買進 (B)</b>:全額買進,於<u>下一根K棒的開盤價</u>成交。</li>
+      <li><b>🔴 賣出 (S)</b>:全部賣出,同樣於下一根開盤價成交。</li>
+      <li><b>⏩ 快轉 (T / 空白鍵)</b>:不出手,時間前進一根;可切 ×1/×5/×20,長按快轉連續播放,或按「▶ 自動」。</li>
+      <li>對手是「買進持有」:從你開始的第一根開盤全額買進、抱到最後一根收盤。</li>
+      <li>最後一根結束時自動以收盤價清倉結算,並揭曉股票名稱與日期。</li>
+      <li>右側工具箱可開關均線(MA20/50/200)、布林通道、成交量、MACD、RSI。</li>
+      <li>結算結果會記錄到「我的戰績」,看看你的長期勝率能不能超過五成!</li>
+    </ul>
+    <div class="btn-row"><button class="btn-primary" id="btnHelpClose">了解了,繼續挑戰!</button></div>
+  </div>
+</div>
+
+<script src="lib/lightweight-charts.standalone.production.js"></script>
+<script src="js/indicators.js"></script>
+<script src="data/index.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
