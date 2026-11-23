@@ -789,7 +789,8 @@
     $("btnReplay").addEventListener("click", replay);
     $("btnReplay2").addEventListener("click", replay);
     $("btnShowResult").addEventListener("click", showResult);
-    $("btnHome").addEventListener("click", goHome);
+    $("btnHome").addEventListener("click", goHome);     // 底部操作列的「回首頁」
+    $("btnHome2").addEventListener("click", goHome);    // 結算畫面的「回首頁」(兩顆是不同元素,id 不可重複)
 
     $("btnHelp").addEventListener("click", function () { openDialog(helpDialog); });
     $("btnHelpClose").addEventListener("click", function () { closeDialog(helpDialog); });

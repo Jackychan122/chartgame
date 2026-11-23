@@ -41,6 +41,18 @@
   var CG = window.CG, G = CG.Game, D = CG.Data, S = CG.Store, I = window.Ind;
   var lines = [], passed = 0, failed = 0;
 
+  /* 儲存層測試一律用記憶體,不碰瀏覽器真正的 localStorage。
+   * 測試頁和遊戲是同一個來源,以前直接用真實儲存體,結果每跑一次就把使用者的戰績清空、偏好改掉。 */
+  var mem = {
+    data: {},
+    getItem: function (k) { return k in this.data ? this.data[k] : null; },
+    setItem: function (k, v) { this.data[k] = String(v); },
+    removeItem: function (k) { delete this.data[k]; },
+  };
+  S.use(mem);
+  var REAL_KEYS = ["cg_track_v1", "cg_prefs_v1", "cg_settings_v1"];
+  var realBefore = REAL_KEYS.map(function (k) { return localStorage.getItem(k); });
+
   function test(name, fn) {
     try { fn(); passed++; lines.push("ok   " + name); }
     catch (e) { failed++; lines.push("FAIL " + name + "  → " + e.message); }
@@ -329,7 +341,7 @@
     S.addRecord({ ts: 1, p: "3m", t: "A", r: 0.1, b: 0.2, w: 0, e: 0, k: 2 });
     S.addRecord({ ts: 2, p: "1y", t: "B", r: 0.3, b: 0.1, w: 1, e: 0, k: 4, x: 0.2 });
     eq(S.track().length, 2); eq(S.track()[1].t, "B");
-    localStorage.setItem("cg_track_v1", JSON.stringify([{ ts: 3, p: "6m", t: "OLD", r: 0, b: 0.01, w: 0, e: 0, k: 0 }, { junk: 1 }, null]));
+    mem.setItem("cg_track_v1", JSON.stringify([{ ts: 3, p: "6m", t: "OLD", r: 0, b: 0.01, w: 0, e: 0, k: 0 }, { junk: 1 }, null]));
     eq(S.track().length, 1, "舊版紀錄要讀得到,垃圾要濾掉"); eq(S.track()[0].t, "OLD");
   });
 
@@ -357,10 +369,10 @@
   });
 
   test("指標偏好:沿用第一版的鍵與格式,新增的項目用預設值", function () {
-    localStorage.removeItem("cg_prefs_v1");
+    mem.removeItem("cg_prefs_v1");
     var p = S.prefs(CG.IND_DEFAULTS);
     eq(p.perf, true); eq(p.rsi, false);
-    localStorage.setItem("cg_prefs_v1", JSON.stringify({ ma20: false, ma50: true, vol: true, macd: false }));   // 舊版存法
+    mem.setItem("cg_prefs_v1", JSON.stringify({ ma20: false, ma50: true, vol: true, macd: false }));   // 舊版存法
     p = S.prefs(CG.IND_DEFAULTS);
     eq(p.ma20, false); eq(p.macd, false); eq(p.ma50, true); eq(p.perf, true, "新版新增的項目採預設值"); eq(p.rsi, false);
     S.savePref("rsi", true);
@@ -397,12 +409,85 @@
     });
   }
 
-  document.getElementById("summary").textContent = failed
-    ? "✗ " + failed + " 項失敗," + passed + " 項通過"
-    : "✓ 全部 " + passed + " 項測試通過";
-  document.getElementById("summary").className = failed ? "fail" : "pass";
-  document.getElementById("out").textContent = lines.join("\n");
-  window.__testResult = { passed: passed, failed: failed, lines: lines };
+  /* ---------- 頁面與程式的一致性(靜態檢查) ----------
+   * 結算畫面的「回首頁」曾經和底部操作列的按鈕共用同一個 id,結果只有第一顆接上處理程式,
+   * 按下去毫無反應。這組檢查用來捉住這一類「畫面有、程式沒接上」的錯誤。 */
+  function pageConsistency() {
+    return Promise.all(["index.html", "js/app.js", "js/chart.js"].map(function (f) {
+      return fetch("../" + f, { cache: "no-store" }).then(function (r) {
+        if (!r.ok) throw new Error(f + " HTTP " + r.status);
+        return r.text();
+      });
+    })).then(function (texts) {
+      var html = texts[0], app = texts[1], chart = texts[2];
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      var ids = {}, dup = [];
+      doc.querySelectorAll("[id]").forEach(function (el) {
+        if (ids[el.id]) dup.push(el.id);
+        ids[el.id] = el;
+      });
+
+      test("index.html 的 id 不重複", function () { eq(dup.join(","), "", "重複的 id: "); });
+
+      test("app.js 以 $(\"id\") 取用的元素都存在", function () {
+        var missing = [], re = /\$\("([A-Za-z0-9_-]+)"\)/g, m;
+        while ((m = re.exec(app))) if (!ids[m[1]] && missing.indexOf(m[1]) < 0) missing.push(m[1]);
+        eq(missing.join(","), "", "找不到的 id: ");
+      });
+
+      test("每顆有 id 的按鈕都接上處理程式", function () {
+        var unbound = [];
+        doc.querySelectorAll("button[id]").forEach(function (b) {
+          if (b.hasAttribute("command")) return;                                  // 由 command 事件處理
+          var direct = app.indexOf('$("' + b.id + '").addEventListener(') >= 0;
+          var viaVariable = new RegExp("=\\s*\\$\\(\"" + b.id + "\"\\)").test(app); // 先存進變數再綁定
+          if (!direct && !viaVariable) unbound.push(b.id);
+        });
+        eq(unbound.join(","), "", "沒有接上處理程式的按鈕: ");
+      });
+
+      test("所有圖示引用都指向存在的 symbol", function () {
+        var symbols = {};
+        doc.querySelectorAll("symbol[id]").forEach(function (s) { symbols[s.id] = true; });
+        var bad = [], used = (html.match(/#i-[a-z]+/g) || []).concat(app.match(/#i-[a-z]+/g) || [], chart.match(/#i-[a-z]+/g) || []);
+        used.forEach(function (u) { if (!symbols[u.slice(1)] && bad.indexOf(u) < 0) bad.push(u); });
+        eq(bad.join(","), "", "不存在的圖示: ");
+      });
+    });
+  }
+
+  test("存放處不可用時(隱私模式 / 被封鎖)什麼都不會壞,只是不保存", function () {
+    S.use(null);
+    eq(S.track().length, 0); eq(S.settings().speed, undefined);
+    S.addRecord({ ts: 9, p: "3m", t: "X", r: 0, b: 0 });     // 以下呼叫都不可以拋出例外
+    S.saveSetting("speed", 20);
+    S.savePref("ma200", true);
+    S.clearTrack();
+    eq(S.saveSetting("speed", 20), false, "寫入失敗要回報 false");
+    eq(S.savePref("ma20", true), false);
+    eq(S.addRecord({ ts: 9, p: "3m", t: "X", r: 0, b: 0 }), false);
+    S.use(mem);
+    eq(S.settings().speed, 5, "換回記憶體後,原本的設定還在");
+    eq(S.prefs(CG.IND_DEFAULTS).ma200, false, "存放處不可用時寫入的設定不應生效");
+  });
+
+  test("整個測試過程沒有改動瀏覽器真正的 localStorage", function () {
+    REAL_KEYS.forEach(function (k, i) { eq(localStorage.getItem(k), realBefore[i], k + " 被改動了"); });
+  });
+
+  function finish() {
+    document.getElementById("summary").textContent = failed
+      ? "✗ " + failed + " 項失敗," + passed + " 項通過"
+      : "✓ 全部 " + passed + " 項測試通過";
+    document.getElementById("summary").className = failed ? "fail" : "pass";
+    document.getElementById("out").textContent = lines.join("\n");
+    window.__testResult = { passed: passed, failed: failed, lines: lines };
+    window.__testDone = true;
+  }
+
+  pageConsistency().catch(function (e) {
+    test("讀取 index.html / js/app.js / js/chart.js", function () { throw e; });
+  }).then(finish);
 })();
 </script>
 </body>
