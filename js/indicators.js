@@ -92,11 +92,26 @@
     return out;
   }
 
+  /* 一次算好圖表會用到的全部指標(輸入是K棒陣列,取其收盤價) */
+  function compute(bars) {
+    var closes = bars.map(function (b) { return b.c; });
+    var bb = bollinger(closes, 20, 2), m = macd(closes, 12, 26, 9);
+    return {
+      ma20: sma(closes, 20),
+      ma50: sma(closes, 50),
+      ma200: sma(closes, 200),
+      bbU: bb.upper, bbM: bb.mid, bbL: bb.lower,
+      rsi: rsi(closes, 14),
+      macdD: m.dif, macdS: m.dea, macdH: m.hist,
+    };
+  }
+
   window.Ind = {
     sma: sma,
     ema: ema,
     bollinger: bollinger,
     macd: macd,
     rsi: rsi,
+    compute: compute,
   };
 })();

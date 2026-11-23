@@ -2,149 +2,284 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>K線操盤挑戰 | 你能打敗「買進持有」嗎?</title>
+<meta name="description" content="隨機抽出一檔真實美股的過去走勢,名稱與日期全部隱藏。本金 $10,000 全額進出,看你的技術分析能不能打敗買進持有。200 檔美股、20 年日K。">
+<meta name="theme-color" content="#0a0d13">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:site_name" content="K線操盤挑戰">
+<meta property="og:title" content="K線操盤挑戰 | 你能打敗「買進持有」嗎?">
+<meta property="og:description" content="隨機抽出一檔真實美股的過去走勢,名稱與日期全部隱藏。本金 $10,000 全額進出,看你的技術分析能不能打敗買進持有。">
+<meta property="og:url" content="https://jackychan122.github.io/chartgame/">
+<meta property="og:image" content="https://jackychan122.github.io/chartgame/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="K線操盤挑戰:你能打敗「買進持有」嗎?">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b0f16'/%3E%3Cpath d='M18 12v10M18 42v10' stroke='%232ebd85' stroke-width='3' stroke-linecap='round'/%3E%3Crect x='12' y='22' width='12' height='20' rx='2' fill='%232ebd85'/%3E%3Cpath d='M32 6v8M32 34v24' stroke='%23f6465d' stroke-width='3' stroke-linecap='round'/%3E%3Crect x='26' y='14' width='12' height='20' rx='2' fill='%23f6465d'/%3E%3Cpath d='M46 20v8M46 46v8' stroke='%23f0b90b' stroke-width='3' stroke-linecap='round'/%3E%3Crect x='40' y='28' width='12' height='18' rx='2' fill='%23f0b90b'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<header>
-  <div class="logo">📈 K線操盤挑戰<span class="mode" id="modeTag">ChartGame</span></div>
-  <div class="hud" id="hudMain">
-    <span>股票 <b class="mystery" id="hudStock">❓ ???</b></span>
-    <span>總資產 <b id="hudEquity">$10,000.00</b> <i id="hudRet" class="pos">+0.00%</i></span>
-    <span>買進持有 <i id="hudBh" class="pos">+0.00%</i> <i id="hudDelta"></i></span>
-    <span>進度 <b id="hudProg">—</b></span>
+<!-- 圖示(Feather / Lucide,MIT 授權) -->
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-logo" viewBox="0 0 24 24">
+    <path d="M6 3v3M6 15v6"/><rect x="3.5" y="6" width="5" height="9" rx="1"/>
+    <path d="M12 5v2M12 19v2"/><rect x="9.5" y="7" width="5" height="12" rx="1"/>
+    <path d="M18 2v7M18 17v5"/><rect x="15.5" y="9" width="5" height="8" rx="1"/>
+  </symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 8"/><path d="M14 17h7v-7"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7z"/><path d="M19 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17.5v.01"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22"/><path d="M14 14.7V17c0 .6.5 1 1 1.2 1.1.6 2 2 2 3.8"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></symbol>
+  <symbol id="i-equals" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></symbol>
+  <symbol id="i-again" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L3 10"/></symbol>
+  <symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 19h16"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 19h16"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13h10l1-13"/></symbol>
+</svg>
+
+<header class="topbar">
+  <h1 class="brand"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg><span>K線操盤挑戰</span></h1>
+  <span class="badge badge-muted" id="modeTag">ChartGame</span>
+  <span class="badge badge-practice" id="practiceTag" hidden>練習 · 不計入戰績</span>
+
+  <div class="hud" id="hud">
+    <div class="hud-item"><span class="hud-label">股票</span><span class="hud-value hud-mystery" id="hudStock">???</span></div>
+    <div class="hud-item hud-main"><span class="hud-label">總資產</span><span class="hud-value" id="hudEquity">$10,000.00</span><span class="hud-chg" id="hudRet" data-base="hud-chg">0.00%</span></div>
+    <div class="hud-item"><span class="hud-label">買進持有</span><span class="hud-chg" id="hudBh" data-base="hud-chg">0.00%</span></div>
+    <div class="hud-item"><span class="hud-label" id="hudDeltaLabel">差距</span><span class="hud-chg" id="hudDelta" data-base="hud-chg">0.00pp</span></div>
+    <div class="hud-item hud-progress"><span class="hud-label">進度</span><span class="hud-chg" id="hudProg" data-base="hud-chg">0 / 0</span><span class="pbar" aria-hidden="true"><i id="progressFill"></i></span></div>
   </div>
-  <div class="top-btns">
-    <button class="icon-btn" id="btnHelp" title="玩法說明">❓</button>
-    <button class="icon-btn" id="btnSide" title="工具箱">⚙</button>
-    <button class="btn-ghost sm" id="btnTrack">📋 我的戰績</button>
+
+  <div class="top-actions">
+    <button type="button" class="icon-btn" id="btnSide" aria-label="收合工具箱" aria-pressed="true" title="收合 / 展開工具箱"><svg class="icon" aria-hidden="true"><use href="#i-sidebar"/></svg></button>
+    <button type="button" class="btn btn-ghost" id="btnNew" aria-label="換一檔" hidden><svg class="icon" aria-hidden="true"><use href="#i-shuffle"/></svg><span id="btnNewLabel">換一檔</span></button>
+    <button type="button" class="icon-btn" id="btnHelp" aria-label="玩法說明" title="玩法說明"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg></button>
+    <button type="button" class="btn btn-ghost" id="btnTrack" aria-label="戰績"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg><span>戰績</span></button>
   </div>
 </header>
-<div id="progressWrap"><div id="progressFill"></div></div>
 
 <main>
-  <section id="chartWrap">
-    <div id="chart"></div>
-    <div id="legend"></div>
-  </section>
+  <div class="stage">
+    <section class="chart-area" aria-label="K線圖">
+      <div id="chart"></div>
+      <div class="legend" id="legend" aria-hidden="true"></div>
+    </section>
 
-  <aside id="sidebar">
-    <section class="panel">
-      <h3>💡 帳戶與持倉</h3>
-      <div id="posBox">
-        <div class="pos-row"><span>現金</span><b id="pCash">$10,000.00</b></div>
-        <div class="pos-row"><span>持股</span><b id="pShares">—</b></div>
-        <div class="pos-row"><span>持倉損益</span><b id="pPnl">—</b></div>
-        <div class="pos-row"><span>交易次數</span><b id="pTrades">0</b></div>
+    <aside class="sidebar" id="sidebar" aria-label="帳戶與工具箱">
+      <section class="panel" aria-labelledby="acctTitle">
+        <h2 id="acctTitle">帳戶</h2>
+        <dl class="acct">
+          <div><dt>現金</dt><dd id="pCash">$10,000.00</dd></div>
+          <div><dt>持股市值</dt><dd id="pMv">—</dd></div>
+          <div><dt>未實現損益</dt><dd id="pUnreal">—</dd></div>
+          <div><dt>已實現損益</dt><dd id="pReal">—</dd></div>
+        </dl>
+        <p class="pos-line" id="posLine" hidden></p>
+      </section>
+
+      <section class="panel panel-grow" aria-labelledby="tripTitle">
+        <h2 id="tripTitle">交易回合</h2>
+        <ol class="trips" id="tripList"></ol>
+      </section>
+
+      <section class="panel" aria-labelledby="indTitle">
+        <h2 id="indTitle">圖表工具</h2>
+        <ul class="ind-list" id="indList"></ul>
+      </section>
+    </aside>
+  </div>
+
+  <div class="actionbar" id="playControls" hidden>
+    <button type="button" class="trade-btn buy" id="btnBuy" disabled><svg class="icon" aria-hidden="true"><use href="#i-up"/></svg><span>買進</span><kbd aria-hidden="true">B</kbd></button>
+    <div class="tl-group">
+      <div class="seg" role="group" aria-label="快轉速度" id="speedChips">
+        <button type="button" class="seg-btn" data-x="1" aria-pressed="true">×1</button>
+        <button type="button" class="seg-btn" data-x="5" aria-pressed="false">×5</button>
+        <button type="button" class="seg-btn" data-x="20" aria-pressed="false">×20</button>
       </div>
-    </section>
+      <div class="tl-row">
+        <button type="button" class="btn btn-step" id="btnStep"><svg class="icon" aria-hidden="true"><use href="#i-skip"/></svg><span id="stepLabel">快轉 1 根</span><kbd aria-hidden="true">T</kbd></button>
+        <button type="button" class="btn btn-auto" id="btnAuto" aria-pressed="false"><svg class="icon" aria-hidden="true"><use id="btnAutoIcon" href="#i-play"/></svg><span id="btnAutoLabel">自動</span><kbd aria-hidden="true">A</kbd></button>
+      </div>
+    </div>
+    <button type="button" class="trade-btn sell" id="btnSell" disabled><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg><span>賣出</span><kbd aria-hidden="true">S</kbd></button>
+  </div>
 
-    <section class="panel">
-      <h3>🧰 技術指標</h3>
-      <div id="indList"></div>
-    </section>
-
-    <section class="panel">
-      <h3>📜 交易紀錄</h3>
-      <div id="tradeList" class="trade-list"><div class="empty">尚無交易,按 B 買進、S 賣出。</div></div>
-    </section>
-  </aside>
+  <div class="actionbar end" id="endControls" hidden>
+    <button type="button" class="btn btn-primary" id="btnAgain"><svg class="icon" aria-hidden="true"><use href="#i-again"/></svg>再玩一局</button>
+    <button type="button" class="btn" id="btnReplay"><svg class="icon" aria-hidden="true"><use href="#i-locate"/></svg>重玩這張圖</button>
+    <button type="button" class="btn" id="btnShowResult"><svg class="icon" aria-hidden="true"><use href="#i-trophy"/></svg>結算</button>
+    <button type="button" class="btn btn-ghost" id="btnHome">回首頁</button>
+  </div>
 </main>
 
-<footer id="actionBar">
-  <div class="ctl-row" id="playControls">
-    <button id="btnBuy" class="btn-buy" disabled>🟢 買進<span class="kbd">B</span></button>
-    <div class="tl-group">
-      <div class="chips" id="speedChips">
-        <button class="chip on" data-x="1">×1</button>
-        <button class="chip" data-x="5">×5</button>
-        <button class="chip" data-x="20">×20</button>
+<div class="hidden-visually" role="status" aria-live="polite" id="live"></div>
+
+<!-- 開始 -->
+<dialog class="dlg dlg-start" id="startDialog" closedby="none" aria-labelledby="startTitle">
+  <div class="dlg-body">
+    <svg class="start-deco" viewBox="0 0 620 230" preserveAspectRatio="none" aria-hidden="true">
+      <g stroke-width="2">
+        <path d="M30 90v70" stroke="#2ebd85"/><rect x="22" y="108" width="16" height="36" rx="2" fill="#2ebd85"/>
+        <path d="M80 60v80" stroke="#f6465d"/><rect x="72" y="76" width="16" height="48" rx="2" fill="#f6465d"/>
+        <path d="M130 80v70" stroke="#2ebd85"/><rect x="122" y="96" width="16" height="38" rx="2" fill="#2ebd85"/>
+        <path d="M180 40v90" stroke="#2ebd85"/><rect x="172" y="56" width="16" height="58" rx="2" fill="#2ebd85"/>
+        <path d="M230 70v80" stroke="#f6465d"/><rect x="222" y="92" width="16" height="40" rx="2" fill="#f6465d"/>
+        <path d="M280 30v80" stroke="#2ebd85"/><rect x="272" y="46" width="16" height="52" rx="2" fill="#2ebd85"/>
+        <path d="M330 60v90" stroke="#2ebd85"/><rect x="322" y="80" width="16" height="50" rx="2" fill="#2ebd85"/>
+        <path d="M380 50v70" stroke="#f6465d"/><rect x="372" y="64" width="16" height="40" rx="2" fill="#f6465d"/>
+        <path d="M430 20v90" stroke="#2ebd85"/><rect x="422" y="36" width="16" height="60" rx="2" fill="#2ebd85"/>
+        <path d="M480 40v80" stroke="#2ebd85"/><rect x="472" y="58" width="16" height="46" rx="2" fill="#2ebd85"/>
+        <path d="M530 10v80" stroke="#f0b90b"/><rect x="522" y="26" width="16" height="54" rx="2" fill="#f0b90b"/>
+        <path d="M580 30v90" stroke="#2ebd85"/><rect x="572" y="50" width="16" height="56" rx="2" fill="#2ebd85"/>
+      </g>
+    </svg>
+    <span class="logo-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+    <h1 id="startTitle">K線操盤挑戰</h1>
+    <p class="tagline">靠技術分析,打敗「買進持有」的懶人策略?</p>
+    <p class="lead">系統隨機抽出一檔真實美股的過去走勢,名稱與日期全部隱藏。本金 <strong>$10,000</strong>、全額進出,在下一根K棒的開盤價成交。玩到最後一根,看你的報酬能不能贏過第一天就買進、抱到尾的報酬。</p>
+
+    <p class="challenge" id="challengeBox" hidden></p>
+
+    <span class="field-label" id="periodLabel">挑戰期間</span>
+    <div class="periods" role="group" aria-labelledby="periodLabel" id="periodGrid"></div>
+
+    <button type="button" class="btn btn-primary btn-start" id="btnStart" autofocus>開始挑戰</button>
+    <p class="start-meta" id="universeMeta"></p>
+    <p class="status-line" id="startStatus" role="status"></p>
+    <p class="start-keys"><kbd aria-hidden="true">B</kbd> 買進 <kbd aria-hidden="true">S</kbd> 賣出 <kbd aria-hidden="true">T</kbd> / <kbd aria-hidden="true">空白鍵</kbd> 快轉 <kbd aria-hidden="true">A</kbd> 自動播放</p>
+  </div>
+</dialog>
+
+<!-- 結算 -->
+<dialog class="dlg dlg-result" id="resultDialog" tabindex="-1" autofocus aria-labelledby="resVerdict">
+  <div class="dlg-body">
+    <button type="button" class="icon-btn dlg-close" id="btnViewChart" aria-label="關閉結算、檢視線圖" title="檢視線圖 (Esc)"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    <div class="verdict" id="verdictBox" data-result="win">
+      <span class="verdict-icon"><svg class="icon" aria-hidden="true"><use id="verdictIcon" href="#i-trophy"/></svg></span>
+      <div>
+        <h1 id="resVerdict">你擊敗了買進持有!</h1>
+        <p id="resSub"></p>
       </div>
-      <div class="tl-main">
-        <button id="btnStep" class="btn-step" disabled>⏩ 快轉 1 根<span class="kbd">T</span></button>
-        <button id="btnAuto" class="btn-auto">▶ 自動</button>
-      </div>
     </div>
-    <button id="btnSell" class="btn-sell" disabled>🔴 賣出<span class="kbd">S</span></button>
-  </div>
-  <!-- 結算後:檢視揭曉線圖時的操作列 -->
-  <div class="ctl-row hidden" id="endControls">
-    <button class="btn-primary" id="btnAgain2">🎲 再玩一局</button>
-    <button class="btn-ghost" id="btnShowResult">📊 查看結算</button>
-    <button class="btn-ghost" id="btnHome2">回首頁</button>
-  </div>
-</footer>
 
-<!-- 開始畫面 -->
-<div class="overlay" id="startOverlay">
-  <div class="card">
-    <h1>📈 K線操盤挑戰</h1>
-    <div class="tagline">你能靠技術分析,打敗「買進持有」的懶人策略嗎?</div>
-    <div class="desc">
-      系統隨機抽出一檔<b>真實美股</b>的過去走勢——股票名稱與日期全部隱藏,你只有圖表與技術指標。
-      本金 <b>$10,000</b>,每次下單全額進出,在下一根K棒的開盤價成交。
-      玩到最後一根,結算你的報酬率能否贏過從第一天就買進抱到尾的報酬率。
+    <div class="reveal">
+      <div class="stock-name"><span class="zh" id="resZh"></span><span class="en" id="resEn"></span></div>
+      <div class="chips" id="resChips"></div>
+      <p class="reveal-period" id="resPeriod"></p>
     </div>
-    <div class="period-grid" id="periodGrid"></div>
-    <button class="btn-primary" id="btnStart">🎲 開始挑戰</button>
-    <div class="foot-note">資料:70 檔美股真實歷史日K(2011–2026,Yahoo Finance)· 僅供娛樂與練習,非投資建議</div>
-  </div>
-</div>
 
-<!-- 結算畫面 -->
-<div class="overlay hidden" id="resultOverlay">
-  <div class="card">
-    <div class="verdict" id="resVerdict"></div>
-    <div class="reveal" id="resStock"></div>
-    <div class="res-grid" id="resGrid"></div>
-    <div class="btn-row">
-      <button class="btn-primary" id="btnAgain">🎲 再玩一局</button>
-      <button class="btn-ghost" id="btnViewChart">👁 看線圖</button>
-      <button class="btn-ghost" id="btnHome">回首頁</button>
-      <button class="btn-ghost" id="btnTrack2">📋 戰績</button>
+    <div class="res-chart" id="resChart" role="img" aria-label="你的資產與買進持有的走勢對比"></div>
+    <div class="stats" id="resStats"></div>
+
+    <div class="share">
+      <label for="shareLink">挑戰連結</label>
+      <input id="shareLink" type="text" readonly spellcheck="false">
+      <span class="copy">
+        <button type="button" class="icon-btn" id="btnCopy" command="--copy" commandfor="shareLink" aria-label="複製挑戰連結" title="複製連結,讓朋友挑戰同一張圖">
+          <svg class="icon" aria-hidden="true"><use id="copyIcon" href="#i-copy"/></svg>
+        </button>
+        <span class="tip" role="status"></span>
+      </span>
+    </div>
+
+    <div class="dlg-actions">
+      <button type="button" class="btn btn-primary" id="btnAgain2"><svg class="icon" aria-hidden="true"><use href="#i-again"/></svg>再玩一局</button>
+      <button type="button" class="btn" id="btnReplay2"><svg class="icon" aria-hidden="true"><use href="#i-locate"/></svg>重玩這張圖</button>
+      <button type="button" class="btn btn-ghost" id="btnTrack2">戰績</button>
+      <button type="button" class="btn btn-ghost" id="btnHome">回首頁</button>
     </div>
   </div>
-</div>
+  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+</dialog>
 
-<!-- 戰績畫面 -->
-<div class="overlay hidden" id="trackOverlay">
-  <div class="card">
-    <h2>📋 我的戰績</h2>
-    <div class="track-stats" id="trackStats"></div>
-    <div class="track-scroll"><table class="track-table">
-      <thead><tr><th>日期</th><th>股票</th><th>期間</th><th>你的報酬</th><th>買進持有</th><th>結果</th></tr></thead>
-      <tbody id="trackBody"></tbody>
-    </table></div>
-    <div class="btn-row">
-      <button class="btn-ghost" id="btnTrackClose">關閉</button>
-      <button class="btn-ghost" id="btnTrackClear">🗑 清除紀錄</button>
+<!-- 戰績 -->
+<dialog class="dlg dlg-wide" id="trackDialog" closedby="any" aria-labelledby="trackTitle">
+  <div class="dlg-body">
+    <header class="dlg-head">
+      <h1 id="trackTitle">我的戰績</h1>
+      <button type="button" class="icon-btn dlg-close" id="btnTrackClose" autofocus aria-label="關閉戰績"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="kpis" id="trackStats"></div>
+    <div class="filters" role="group" aria-label="篩選期間" id="trackFilters"></div>
+    <div class="table-wrap" tabindex="0" role="region" aria-labelledby="trackTitle">
+      <table class="track">
+        <caption class="hidden-visually">每局的報酬與勝負</caption>
+        <thead><tr>
+          <th scope="col">日期</th><th scope="col">股票</th><th scope="col">期間</th>
+          <th scope="col">你</th><th scope="col">買進持有</th><th scope="col">差距</th><th scope="col">交易</th><th scope="col">結果</th>
+        </tr></thead>
+        <tbody id="trackBody"></tbody>
+      </table>
+    </div>
+    <p class="status-line" id="trackStatus" role="status"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn btn-ghost" id="btnExport"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>匯出</button>
+      <button type="button" class="btn btn-ghost" id="btnImport"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>匯入</button>
+      <input type="file" id="importFile" accept="application/json,.json" class="hidden-visually" tabindex="-1" aria-hidden="true">
+      <button type="button" class="btn btn-ghost btn-danger" id="btnTrackClear"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span id="btnClearLabel">清除紀錄</span></button>
     </div>
   </div>
-</div>
+</dialog>
 
-<!-- 說明畫面 -->
-<div class="overlay hidden" id="helpOverlay">
-  <div class="card">
-    <h2>❓ 玩法說明</h2>
-    <ul class="help-list">
-      <li>畫面顯示一檔隨機美股的K線圖(名稱、日期隱藏),左側為已走完的歷史,你的挑戰從最後一根開始。</li>
-      <li><b>🟢 買進 (B)</b>:全額買進,於<u>下一根K棒的開盤價</u>成交。</li>
-      <li><b>🔴 賣出 (S)</b>:全部賣出,同樣於下一根開盤價成交。</li>
-      <li><b>⏩ 快轉 (T / 空白鍵)</b>:不出手,時間前進一根;可切 ×1/×5/×20,長按快轉連續播放,或按「▶ 自動」。</li>
-      <li>對手是「買進持有」:從你開始的第一根開盤全額買進、抱到最後一根收盤。</li>
-      <li>最後一根結束時自動以收盤價清倉結算,並揭曉股票名稱與日期。</li>
-      <li>右側工具箱可開關均線(MA20/50/200)、布林通道、成交量、MACD、RSI。</li>
-      <li>結算結果會記錄到「我的戰績」,看看你的長期勝率能不能超過五成!</li>
-    </ul>
-    <div class="btn-row"><button class="btn-primary" id="btnHelpClose">了解了,繼續挑戰!</button></div>
+<!-- 說明 -->
+<dialog class="dlg dlg-help" id="helpDialog" closedby="any" aria-labelledby="helpTitle">
+  <div class="dlg-body">
+    <header class="dlg-head">
+      <h1 id="helpTitle">玩法說明</h1>
+      <button type="button" class="icon-btn dlg-close" id="btnHelpClose" autofocus aria-label="關閉說明"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </header>
+    <div class="help-cols">
+      <ul class="help-rules">
+        <li>畫面是一檔<b>隨機美股</b>的K線圖,名稱與日期都隱藏。左邊是已經走完的歷史,你的挑戰從最後一根開始。</li>
+        <li><b>買進 (B)</b>:全額買進,在下一根K棒的開盤價成交。<b>賣出 (S)</b>:全部賣出,同樣在下一根開盤價成交。</li>
+        <li><b>快轉 (T / 空白鍵 / →)</b>:不出手,時間前進。可切換 ×1 / ×5 / ×20、長按快轉連續播放,或按<b>自動 (A)</b>。</li>
+        <li>對手是<b>買進持有</b>:在你出發那一根的開盤價全額買進,抱到最後一根收盤。下方的「資產對比」窗格會即時畫出兩條曲線。</li>
+        <li>玩到最後一根會自動以收盤價清倉結算,並揭曉股票與日期。報酬只算價差,不含股息。</li>
+        <li>圖上的連線是每一筆買進到賣出的損益;虛線表示還未賣出的部位。</li>
+        <li>「換一檔」會放棄目前這一局(不計入戰績);「重玩這張圖」屬於練習,同樣不計入。</li>
+      </ul>
+      <table class="shortcuts">
+      <thead><tr><th scope="col">快速鍵</th><th scope="col">功能</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>B</kbd></td><td>買進</td></tr>
+        <tr><td><kbd>S</kbd></td><td>賣出</td></tr>
+        <tr><td><kbd>T</kbd> <kbd>空白鍵</kbd> <kbd>→</kbd></td><td>快轉</td></tr>
+        <tr><td><kbd>A</kbd></td><td>自動播放 / 暫停</td></tr>
+        <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>快轉速度 ×1 / ×5 / ×20</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>關閉彈出畫面</td></tr>
+      </tbody>
+    </table>
+    </div>
   </div>
-</div>
+</dialog>
 
 <script src="lib/lightweight-charts.standalone.production.js"></script>
-<script src="js/indicators.js"></script>
 <script src="data/index.js"></script>
+<script src="js/indicators.js"></script>
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+<script src="js/store.js"></script>
+<script src="js/chart.js"></script>
 <script src="js/app.js"></script>
+<script type="module">
+  // <input switch> 目前只有 Safari 原生支援;其他瀏覽器才載入 polyfill(載入失敗就退回一般核取方塊)
+  if (!('switch' in HTMLInputElement.prototype)) {
+    import('https://cdn.jsdelivr.net/npm/input-switch-polyfill@1.12.0/input-switch-polyfill.js').catch(() => {});
+  }
+</script>
 </body>
 </html>

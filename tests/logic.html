@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChartGame 邏輯測試</title>
+<style>
+  body { margin: 0; padding: 20px; background: #0a0d13; color: #e9edf4; font: 13px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif; }
+  h1 { font-size: 18px; }
+  .pass { color: #2ebd85; }
+  .fail { color: #f6465d; font-weight: 700; }
+  pre { white-space: pre-wrap; font: 12px Consolas, monospace; color: #b4bdcc; }
+  #summary { font-size: 15px; font-weight: 700; margin: 12px 0; }
+</style>
+</head>
+<body>
+<h1>ChartGame 邏輯測試</h1>
+<p>直接載入遊戲規則、資料層、指標與儲存層,不經過畫面。開啟本頁即執行。</p>
+<div id="summary">執行中…</div>
+<pre id="out"></pre>
+
+<script src="../lib/lightweight-charts.standalone.production.js"></script>
+<script src="../data/index.js"></script>
+<!-- 真實資料抽樣用(涵蓋連續數列、多區段、上市不久的標的) -->
+<script src="../data/AAPL.js"></script>
+<script src="../data/NVDA.js"></script>
+<script src="../data/BRK-B.js"></script>
+<script src="../data/MO.js"></script>
+<script src="../data/MARA.js"></script>
+<script src="../data/SNDK.js"></script>
+<script src="../data/GEV.js"></script>
+<script src="../data/MRSH.js"></script>
+<script src="../js/indicators.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/game.js"></script>
+<script src="../js/store.js"></script>
+<script src="../js/chart.js"></script>   <!-- 只取指標定義與預設值,不會建立圖表 -->
+<script>
+(function () {
+  "use strict";
+  var CG = window.CG, G = CG.Game, D = CG.Data, S = CG.Store, I = window.Ind;
+  var lines = [], passed = 0, failed = 0;
+
+  function test(name, fn) {
+    try { fn(); passed++; lines.push("ok   " + name); }
+    catch (e) { failed++; lines.push("FAIL " + name + "  → " + e.message); }
+  }
+  function ok(cond, msg) { if (!cond) throw new Error(msg || "assertion failed"); }
+  function eq(a, b, msg) {
+    if (a !== b) throw new Error((msg || "") + " expected " + JSON.stringify(b) + ", got " + JSON.stringify(a));
+  }
+  function near(a, b, eps, msg) {
+    if (Math.abs(a - b) > (eps || 1e-9)) throw new Error((msg || "") + " expected ≈" + b + ", got " + a);
+  }
+  function bar(o, c) { return { o: o, h: Math.max(o, c) + 0.5, l: Math.min(o, c) - 0.5, c: c, v: 1000, d: 0, t: "2000-01-01" }; }
+  function series(closes) {            // 每根開盤 = 前一根收盤
+    return closes.map(function (c, k) { return bar(k ? closes[k - 1] : c, c); });
+  }
+  var P = G.PERIODS["3m"], NEED = G.total(P);
+  function game(closes) {
+    var bars = series(closes);
+    ok(bars.length === NEED, "test series must have " + NEED + " bars");
+    return G.create(bars, P, 0);
+  }
+  // 挑戰區間的收盤價:110 → 99 → 121 → 110 → 110 …(出發那根收 100,所以第一根開盤 100)
+  var closes = new Array(NEED).fill(100);
+  var F = P.ctx + P.hist;
+  closes.fill(110, F);
+  closes[F + 1] = 99;
+  closes[F + 2] = 121;
+
+  /* ---------- 遊戲規則 ---------- */
+  test("新局的起點與終點", function () {
+    var g = game(closes);
+    eq(g.cursor, F - 1); eq(g.firstFuture, F); eq(g.lastIdx, NEED - 1); eq(g.play, 63);
+    eq(g.eq.length, 1); eq(g.eq[0], G.INITIAL); eq(G.revealed(g), 0);
+    ok(G.canBuy(g) && !G.canSell(g), "一開始只能買");
+  });
+
+  test("買進在下一根開盤價全額成交", function () {
+    var g = game(closes);
+    ok(G.order(g, "buy"), "order accepted");
+    eq(g.cursor, F); near(g.cost, 100); near(g.shares, 100); eq(g.cash, 0);
+    eq(g.trades.length, 1); eq(g.trades[0].side, "buy"); eq(g.trades[0].i, F);
+    ok(!G.canBuy(g) && G.canSell(g), "持股時只能賣");
+    eq(G.equity(g), 100 * 110);
+  });
+
+  test("買賣一個回合的算術", function () {
+    var g = game(closes);
+    G.order(g, "buy");                  // 第 1 根開盤 100
+    G.step(g, 1);                       // 第 2 根:收 99
+    ok(G.order(g, "sell"), "sell accepted");   // 第 3 根開盤 99
+    eq(g.trades.length, 2); eq(g.trades[1].price, 99);
+    near(g.cash, 9900); eq(g.shares, 0); eq(g.cost, 0);
+    var t = G.trips(g);
+    eq(t.length, 1); ok(!t[0].open, "trip closed");
+    near(t[0].ret, -0.01); near(t[0].pnl, -100);
+    ok(!G.canSell(g) && G.canBuy(g), "空手時只能買");
+  });
+
+  test("空手快轉時資產不變、買進持有照走", function () {
+    var g = game(closes);
+    G.step(g, 4);
+    near(G.equity(g), G.INITIAL); near(G.bhRet(g), 0.10);
+    eq(g.trades.length, 0); eq(G.revealed(g), 4);
+  });
+
+  test("抱到最後一根:以收盤價強制清倉", function () {
+    var g = game(closes);
+    G.order(g, "buy");
+    G.step(g, 200);
+    ok(g.ended, "game ended"); eq(g.cursor, g.lastIdx); eq(G.revealed(g), 63);
+    eq(g.trades.length, 2); eq(g.trades[1].forced, true); eq(g.trades[1].i, g.lastIdx);
+    near(g.ret, g.bhRet, 1e-12, "第一天買進抱到尾 = 買進持有");
+    ok(g.tie && !g.win, "報酬相同 → 平手,不算勝");
+    near(g.finalEquity, g.cash); eq(g.shares, 0);
+    eq(g.eq.length, g.play + 1); eq(g.bh.length, g.play + 1);
+  });
+
+  test("完局後不能再操作", function () {
+    var g = game(closes);
+    G.step(g, 300);
+    ok(g.ended, "ended");
+    ok(!G.order(g, "buy") && !G.order(g, "sell"), "orders rejected");
+    G.step(g, 5); eq(g.cursor, g.lastIdx); eq(g.trades.length, 0);
+  });
+
+  test("最後一根不能再下單(會在下一次開盤成交,但已沒有下一根)", function () {
+    var g = game(closes);
+    G.step(g, 62);                      // 停在最後一根的前一根?不:step 62 → 來到第 62 根
+    ok(G.canBuy(g), "還可以買(成交在最後一根開盤)");
+    G.order(g, "buy");
+    ok(g.ended, "買在最後一根開盤後立即收盤清倉");
+    eq(g.trades.length, 2); ok(g.trades[0].i === g.trades[1].i, "同一根買進並結算");
+  });
+
+  test("結算統計:回撤、持股時間、回合", function () {
+    var g = game(closes);
+    G.order(g, "buy");                  // 100
+    G.step(g, 1);                       // 收 99 → 回撤 −1%
+    G.order(g, "sell");                 // 第 3 根開盤 99
+    G.step(g, 60);
+    var st = G.stats(g);
+    near(st.maxDrawdown, -0.10, 1e-12, "11000 → 9900");
+    near(st.bhMaxDrawdown, 9900 / 11000 - 1, 1e-12, "買進持有:11000 → 9900(比後面 12100 → 11000 更深)");
+    eq(st.roundTrips, 1); eq(st.trades, 2); near(st.realized, -100);
+    near(st.best, -0.01); near(st.worst, -0.01);
+    eq(st.timeInMarket, 2 / 63);        // 第 1、2 根收盤時持股
+    eq(st.from, "2000-01-01");
+  });
+
+  test("最大回撤的計算", function () {
+    near(G.maxDrawdown([100, 120, 90, 110, 80, 130]), 80 / 120 - 1);
+    near(G.maxDrawdown([100, 101, 102]), 0);
+    near(G.maxDrawdown([100]), 0); near(G.maxDrawdown([]), 0);
+  });
+
+  test("勝負判定:領先 / 落後 / 平手", function () {
+    var a = game(closes);
+    G.step(a, 2); G.order(a, "buy"); G.step(a, 200);          // 99 買進、110 賣出 vs 100 買進
+    ok(a.win && !a.tie, "低位買進 → 勝");
+    var b = game(closes);
+    G.step(b, 3); G.order(b, "buy"); G.step(b, 200);          // 121 買進
+    ok(!b.win && !b.tie, "高位買進 → 敗");
+  });
+
+  /* ---------- 資料層 ---------- */
+  test("日期換算(UTC,不受本機時區影響)", function () {
+    eq(D.dateStr(0), "1970-01-01"); eq(D.dayNumber("1970-01-01"), 0);
+    eq(D.dateStr(10957), "2000-01-01"); eq(D.dayNumber("2000-01-01"), 10957);   // 公知的 epoch day
+    eq(D.dateStr(19723), "2024-01-01"); eq(D.dayNumber("2024-01-01"), 19723);
+    eq(D.dateStr(10956), "1999-12-31"); eq(D.dateStr(10958), "2000-01-02");
+    eq(D.weekday(D.dayNumber("2026-11-23")), 1);   // 星期一
+    eq(D.weekday(D.dayNumber("2026-11-27")), 5);   // 星期五
+    eq(D.weekday(D.dayNumber("2026-11-29")), 0);   // 星期日
+  });
+
+  test("週K 聚合:開高低收與成交量", function () {
+    var d = D.dayNumber("2024-06-03");              // 星期一
+    var bars = [
+      { d: d,     t: D.dateStr(d),     o: 10, h: 12, l: 9,  c: 11, v: 100 },
+      { d: d + 1, t: D.dateStr(d + 1), o: 11, h: 13, l: 10, c: 12, v: 200 },
+      { d: d + 3, t: D.dateStr(d + 3), o: 12, h: 15, l: 8,  c: 9,  v: 300 },   // 星期四(星期五放假)
+      { d: d + 7, t: D.dateStr(d + 7), o: 9,  h: 10, l: 7,  c: 8,  v: 400 },   // 下星期一
+    ];
+    var wk = D.weeklyBars(bars, []);
+    // 最後一根是星期一 → 還沒走完的一週不採用
+    eq(wk.bars.length, 1);
+    var w = wk.bars[0];
+    eq(w.o, 10); eq(w.h, 15); eq(w.l, 8); eq(w.c, 9); eq(w.v, 600);
+    eq(w.t, D.dateStr(d + 3));
+    bars.push({ d: d + 8, t: D.dateStr(d + 8), o: 8, h: 9, l: 7, c: 8.5, v: 50 });
+    eq(D.weeklyBars(bars, []).bars.length, 2, "星期二收盤的資料:當週仍未完成");
+    bars.push({ d: d + 11, t: D.dateStr(d + 11), o: 8, h: 9, l: 7, c: 8.6, v: 50 });
+    eq(D.weeklyBars(bars, []).bars.length, 2, "到星期五才算完整的一週");
+  });
+
+  test("週K 聚合保留區段斷點", function () {
+    var d = D.dayNumber("2024-06-03"), bars = [], k;     // 星期一
+    for (k = 0; k < 12; k++) bars.push({ d: d + k, t: D.dateStr(d + k), o: 1, h: 1, l: 1, c: 1, v: 1 });
+    eq(D.weeklyBars(bars, []).bars.length, 2, "兩個星期 → 兩根週K(最後一根星期二,那一週不完整所以只剩第一週)");
+    bars.push({ d: d + 11, t: D.dateStr(d + 11), o: 1, h: 1, l: 1, c: 1, v: 1 });   // 補到星期二
+    var wk = D.weeklyBars(bars, [7]);              // 下星期一斷層:新區段從第二根週K 開始
+    eq(wk.bars.length, 2); eq(wk.cuts.join(","), "1");
+    wk = D.weeklyBars(bars, [4]);                  // 星期四斷層:斷層在第一根週K 裡面 → 這根前後都要切開
+    eq(wk.cuts.join(","), "0,1");
+    wk = D.weeklyBars(bars, [9]);                  // 下星期三斷層:落在第二根週K 裡面
+    eq(wk.cuts.join(","), "1,2");
+  });
+
+  test("區段:只在單一連續區段內選視窗", function () {
+    var cuts = [10, 40];
+    eq(JSON.stringify(D.segmentsOf(70, cuts)), "[[0,9],[10,39],[40,69]]");
+    eq(D.segmentsOf(70, []).length, 1);
+    eq(D.pickWindow(70, cuts, 25, function () { return 0; }), 10, "第一段太短,只能從第二段開始");
+    eq(D.pickWindow(70, cuts, 25, function () { return 0.4999; }), 15, "第二段的最後一個起點");
+    eq(D.pickWindow(70, cuts, 25, function () { return 0.5; }), 40, "第三段的第一個起點");
+    eq(D.pickWindow(70, cuts, 25, function () { return 0.9999; }), 45);
+    eq(D.pickWindow(70, cuts, 31, function () { return 0.5; }), null, "沒有任何區段夠長");
+    eq(D.pickWindow(50, [], 50, function () { return 0.5; }), 0, "剛好塞得下");
+    eq(D.pickWindow(50, [], 51, function () { return 0.5; }), null);
+    ok(D.windowIsValid(70, cuts, 10, 30) && !D.windowIsValid(70, cuts, 5, 30), "視窗不可跨區段");
+    ok(!D.windowIsValid(70, cuts, -1, 30) && !D.windowIsValid(70, cuts, 45, 30), "視窗不可越界");
+  });
+
+  test("隨機視窗一律落在區段內,且涵蓋每個位置", function () {
+    var cuts = [40, 100], seen = {}, i, s;
+    for (i = 0; i < 5000; i++) {
+      s = D.pickWindow(150, cuts, 20, Math.random);
+      ok(D.windowIsValid(150, cuts, s, 20), "start " + s + " crosses a cut");
+      seen[s] = true;
+    }
+    eq(Object.keys(seen).length, 21 + 41 + 31, "三段共有 93 個合法起點,都要出現過");
+  });
+
+  test("標的清單:200 檔、欄位齊全、每個期間都有足夠標的", function () {
+    var list = D.index();
+    eq(list.length, 200);
+    var seen = {};
+    list.forEach(function (s) {
+      ok(/^[A-Z.\-]+$/.test(s.t) && !seen[s.t], "duplicate/bad ticker " + s.t); seen[s.t] = true;
+      ok(s.n && s.g && s.i && s.f && s.l, "missing fields for " + s.t);
+      ok(s.b >= s.m && s.m > 0 && s.w > 0, "bad bar counts for " + s.t);
+      ok(s.sp === 0 || s.sp === 1, "bad sp flag " + s.t);
+      ok(s.f < s.l, "bad dates " + s.t);
+    });
+    ok(seen["BRK-B"], "BRK-B in universe");
+    G.ORDER.forEach(function (k) {
+      ok(D.eligible(G.PERIODS[k], G.total(G.PERIODS[k])).length >= 150, "too few tickers for " + k);
+    });
+    ok(D.eligible(G.PERIODS["5y"], G.total(G.PERIODS["5y"])).every(function (s) { return s.w >= G.total(G.PERIODS["5y"]); }));
+    ok(D.meta("NOPE") === null); eq(D.meta("AAPL").t, "AAPL"); eq(D.meta("BRK-B").s, "BRK.B");
+  });
+
+  /* ---------- 指標 ---------- */
+  function bruteSma(a, n, i) { var s = 0; for (var k = i - n + 1; k <= i; k++) s += a[k]; return s / n; }
+  var rnd = function () { var x = 7; return function () { x = (x * 1103515245 + 12345) % 2147483648; return 100 + x / 21474836; }; }();
+  var px = Array.from({ length: 400 }, rnd);
+
+  test("SMA 與暴力法一致,前 n−1 根為 null", function () {
+    var s = I.sma(px, 20);
+    [0, 18, 19, 20, 199, 399].forEach(function (i) {
+      if (i < 19) ok(s[i] === null, "sma[" + i + "] should be null"); else near(s[i], bruteSma(px, 20, i), 1e-9);
+    });
+  });
+
+  test("EMA 以前 n 根平均起算,之後遞迴", function () {
+    var n = 12, e = I.ema(px, n);
+    ok(e[n - 2] === null, "ema before n is null");
+    near(e[n - 1], bruteSma(px, n, n - 1), 1e-9);
+    for (var i = n; i < 60; i++) near(e[i], px[i] * 2 / (n + 1) + e[i - 1] * (1 - 2 / (n + 1)), 1e-9);
+  });
+
+  test("布林通道:中線 = MA20,上下軌對稱於 2 個標準差", function () {
+    var b = I.bollinger(px, 20, 2);
+    ok(b.upper[18] === null, "bb before n is null");
+    var i = 250, m = bruteSma(px, 20, i), sq = 0;
+    for (var k = i - 19; k <= i; k++) sq += (px[k] - m) * (px[k] - m);
+    var sd = Math.sqrt(sq / 20);
+    near(b.mid[i], m, 1e-9); near(b.upper[i], m + 2 * sd, 1e-9); near(b.lower[i], m - 2 * sd, 1e-9);
+  });
+
+  test("MACD:DIF = EMA12 − EMA26,柱狀 = DIF − DEA(均為因果計算)", function () {
+    var m = I.macd(px, 12, 26, 9), e12 = I.ema(px, 12), e26 = I.ema(px, 26);
+    ok(m.dif[24] === null && m.dif[25] !== null, "dif starts at 25");
+    ok(m.dea[32] === null && m.dea[33] !== null, "dea starts at 33");
+    for (var i = 100; i < 110; i++) {
+      near(m.dif[i], e12[i] - e26[i], 1e-9);
+      near(m.hist[i], m.dif[i] - m.dea[i], 1e-12);
+    }
+    // 因果性:把之後的資料改掉,前面的指標值不能變
+    var cut = px.slice(0, 200), m2 = I.macd(cut, 12, 26, 9), r2 = I.rsi(cut, 14), s2 = I.sma(cut, 50);
+    for (i = 0; i < 200; i++) {
+      near(m.dif[i], m2.dif[i], 1e-9); near(m.dea[i], m2.dea[i], 1e-9);
+      near(I.rsi(px, 14)[i], r2[i], 1e-9); near(I.sma(px, 50)[i], s2[i], 1e-9);
+    }
+  });
+
+  test("RSI:全漲為 100、全跌為 0,並符合 Wilder 平滑式", function () {
+    var up = Array.from({ length: 60 }, function (_, i) { return 100 + i; });
+    var dn = Array.from({ length: 60 }, function (_, i) { return 200 - i; });
+    eq(I.rsi(up, 14)[59], 100); eq(I.rsi(dn, 14)[59], 0);
+    var r = I.rsi(px, 14), gain = 0, loss = 0, i, d;
+    for (i = 1; i <= 14; i++) { d = px[i] - px[i - 1]; if (d > 0) gain += d; else loss -= d; }
+    gain /= 14; loss /= 14;
+    near(r[14], 100 - 100 / (1 + gain / loss), 1e-9);
+    for (i = 15; i < 30; i++) {
+      d = px[i] - px[i - 1];
+      gain = (gain * 13 + Math.max(d, 0)) / 14; loss = (loss * 13 + Math.max(-d, 0)) / 14;
+      near(r[i], 100 - 100 / (1 + gain / loss), 1e-9);
+    }
+    ok(I.rsi(px, 14)[13] === null, "rsi before n is null");
+  });
+
+  test("compute 一次產生圖表要用的全部指標", function () {
+    var c = I.compute(series(px));
+    ["ma20", "ma50", "ma200", "bbU", "bbM", "bbL", "rsi", "macdD", "macdS", "macdH"].forEach(function (k) {
+      ok(Array.isArray(c[k]) && c[k].length === px.length, k + " missing");
+    });
+    near(c.ma20[399], I.sma(px, 20)[399], 1e-12); near(c.rsi[399], I.rsi(px, 14)[399], 1e-12);
+    ok(c.ma200[198] === null && c.ma200[199] !== null, "ma200 needs 200 bars");
+  });
+
+  /* ---------- 儲存層 ---------- */
+  test("戰績:新增、讀取、與舊版紀錄共存", function () {
+    S.clearTrack();
+    eq(S.track().length, 0);
+    S.addRecord({ ts: 1, p: "3m", t: "A", r: 0.1, b: 0.2, w: 0, e: 0, k: 2 });
+    S.addRecord({ ts: 2, p: "1y", t: "B", r: 0.3, b: 0.1, w: 1, e: 0, k: 4, x: 0.2 });
+    eq(S.track().length, 2); eq(S.track()[1].t, "B");
+    localStorage.setItem("cg_track_v1", JSON.stringify([{ ts: 3, p: "6m", t: "OLD", r: 0, b: 0.01, w: 0, e: 0, k: 0 }, { junk: 1 }, null]));
+    eq(S.track().length, 1, "舊版紀錄要讀得到,垃圾要濾掉"); eq(S.track()[0].t, "OLD");
+  });
+
+  test("戰績:匯入會去重、排序、略過無效內容", function () {
+    S.clearTrack();
+    S.addRecord({ ts: 5, p: "3m", t: "A", r: 0.1, b: 0.2, w: 0, e: 0, k: 2 });
+    var added = S.importTrack(JSON.stringify({ records: [
+      { ts: 1, p: "1y", t: "B", r: 0.3, b: 0.1, w: 1, e: 0, k: 4 },
+      { ts: 5, p: "3m", t: "A", r: 0.1, b: 0.2, w: 0, e: 0, k: 2 },   // 重複
+      { ts: 9, p: "2y", t: "C", r: "bad", b: 0 },                       // 無效
+      { ts: 9, p: "2y", r: 0.1, b: 0 },                                 // 無效
+    ] }));
+    eq(added, 1);
+    var t = S.track();
+    eq(t.length, 2); eq(t[0].t, "B"); eq(t[1].t, "A", "依時間排序");
+    var threw = false;
+    try { S.importTrack("not json"); } catch (e) { threw = true; }
+    ok(threw, "invalid json must throw");
+    threw = false;
+    try { S.importTrack(JSON.stringify({ nope: 1 })); } catch (e) { threw = true; }
+    ok(threw, "wrong shape must throw");
+    var back = JSON.parse(S.exportText());
+    eq(back.app, "chartgame"); eq(back.records.length, 2);
+    S.clearTrack(); eq(S.track().length, 0);
+  });
+
+  test("指標偏好:沿用第一版的鍵與格式,新增的項目用預設值", function () {
+    localStorage.removeItem("cg_prefs_v1");
+    var p = S.prefs(CG.IND_DEFAULTS);
+    eq(p.perf, true); eq(p.rsi, false);
+    localStorage.setItem("cg_prefs_v1", JSON.stringify({ ma20: false, ma50: true, vol: true, macd: false }));   // 舊版存法
+    p = S.prefs(CG.IND_DEFAULTS);
+    eq(p.ma20, false); eq(p.macd, false); eq(p.ma50, true); eq(p.perf, true, "新版新增的項目採預設值"); eq(p.rsi, false);
+    S.savePref("rsi", true);
+    eq(S.prefs(CG.IND_DEFAULTS).rsi, true);
+    S.saveSetting("speed", 5); eq(S.settings().speed, 5);
+  });
+
+  /* ---------- 真實資料抽樣 ---------- */
+  var tickers = ["AAPL", "NVDA", "BRK-B", "MO", "MARA", "SNDK", "GEV", "MRSH"].filter(function (t) { return window.STOCKS && window.STOCKS[t]; });
+  if (tickers.length) {
+    test("真實資料:" + tickers.join(", ") + " 的區段內不含斷層", function () {
+      tickers.forEach(function (t) {
+        var raw = window.STOCKS[t], bars = D.dailyBars(raw), cuts = raw.x || [], n = bars.length;
+        eq(bars.length, raw.d.length);
+        ok(Array.isArray(raw.x), "x (cuts) array missing");
+        for (var k = 1; k < n; k++) ok(bars[k].d > bars[k - 1].d, t + " dates must ascend");
+        D.segmentsOf(n, cuts).forEach(function (seg) {
+          var i, b, prev;
+          for (i = seg[0]; i <= seg[1]; i++) {
+            b = bars[i];
+            ok(b.h >= Math.max(b.o, b.c) - 1e-9 && b.l <= Math.min(b.o, b.c) + 1e-9 && b.l > 0, t + " bad OHLC at " + b.t);
+            if (prev) {
+              ok(b.d - prev.d <= 20, t + " time gap at " + b.t);
+              ok(Math.abs(b.c / prev.c - 1) < 0.60, t + " extreme move at " + b.t + " (" + ((b.c / prev.c - 1) * 100).toFixed(1) + "%)");
+            }
+            prev = b;
+          }
+        });
+        var meta = D.meta(t);
+        eq(Math.max.apply(null, D.segmentsOf(n, cuts).map(function (s) { return s[1] - s[0] + 1; })), meta.m, t + " index m mismatch");
+        var wk = D.weeklyBars(bars, cuts);
+        eq(Math.max.apply(null, D.segmentsOf(wk.bars.length, wk.cuts).map(function (s) { return s[1] - s[0] + 1; })), meta.w, t + " index w mismatch");
+      });
+    });
+  }
+
+  document.getElementById("summary").textContent = failed
+    ? "✗ " + failed + " 項失敗," + passed + " 項通過"
+    : "✓ 全部 " + passed + " 項測試通過";
+  document.getElementById("summary").className = failed ? "fail" : "pass";
+  document.getElementById("out").textContent = lines.join("\n");
+  window.__testResult = { passed: passed, failed: failed, lines: lines };
+})();
+</script>
+</body>
+</html>
